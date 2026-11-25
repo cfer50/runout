@@ -1,0 +1,96 @@
+# runout config. Copy to ~/.config/runout/config.toml (or /etc/runout/config.toml).
+#
+# Any value written as "env:NAME" is read from the environment variable NAME,
+# so you can keep secrets in /etc/runout/env instead of this file.
+
+[general]
+media_player = "Turntable"        # shows up as the "player" in ListenBrainz/Maloja/Koito
+# queue_path = "~/.local/state/runout/queue.db"
+
+
+# --- When to listen ---------------------------------------------------------------
+# Pick ONE trigger.
+
+[trigger]
+type = "homeassistant"
+url = "http://homeassistant.local:8123"
+token = "env:HA_TOKEN"            # a long-lived access token from your HA profile page
+entity_id = "sensor.turntable_plug_power"
+# Numeric sensors: listening starts when the value goes above this.
+# Tip: watch the sensor in HA with the platter stopped vs spinning and pick a value
+# in between (e.g. idle 5 W, spinning 8 W -> 6.5).
+on_above = 6.5
+poll_seconds = 5
+on_debounce = 2                   # readings in a row before starting
+off_debounce = 3                  # readings in a row before stopping
+
+# Non-numeric entities (a switch, media_player, binary_sensor): leave out on_above
+# and list the states that mean "playing":
+# on_states = ["on", "playing"]
+
+# Or listen all the time:
+# [trigger]
+# type = "always"
+
+# Or run any command; exit code 0 means "playing":
+# [trigger]
+# type = "command"
+# command = "gpioget gpiochip0 17 | grep -q 1"
+
+
+# --- Microphone -------------------------------------------------------------------
+
+[audio]
+backend = "arecord"               # "arecord" (Linux/ALSA) or "sounddevice"
+device = "auto"                   # first mic plugged in; or pin one, e.g. "plughw:CARD=camera,DEV=0" (see `arecord -l`)
+sample_rate = 44100
+channels = 1
+sample_seconds = 10               # length of each sample sent for recognition
+interval_seconds = 20             # how often to sample while playing
+silence_rms = 0.004               # below this level counts as silence; tune with `runout check`
+
+
+# --- Recognition ------------------------------------------------------------------
+
+[recogniser]
+type = "shazam"                   # free, no account. Or "audd" with token = "..."
+# max_skew = 0.001                # stricter Shazam matching; leave off if your deck runs a bit fast/slow
+
+
+# --- Scrobble rules ---------------------------------------------------------------
+
+[session]
+min_confirmations = 2             # matches in a row before a song counts
+min_listen_seconds = 30           # songs heard for less than this aren't scrobbled
+scrobble_after_seconds = 240      # scrobble early once heard this long (last.fm's 4 minutes)
+idle_timeout_seconds = 90         # this long without a match ends the current song
+
+
+# --- Where scrobbles go -----------------------------------------------------------
+# Add as many as you like.
+
+# Maloja (Settings -> API keys). Koito works the same way.
+[[target]]
+type = "listenbrainz"
+name = "maloja"
+url = "http://maloja.local:42010/apis/listenbrainz"
+token = "env:MALOJA_KEY"
+
+# ListenBrainz itself:
+# [[target]]
+# type = "listenbrainz"
+# name = "listenbrainz"
+# url = "https://api.listenbrainz.org"
+# token = "env:LISTENBRAINZ_TOKEN"
+
+# last.fm. Create an API account at https://www.last.fm/api/account/create,
+# then run `runout lastfm-auth` to get the session key.
+# [[target]]
+# type = "lastfm"
+# api_key = "..."
+# api_secret = "..."
+# session_key = "..."
+
+# Print to the log. Useful while you're setting up.
+[[target]]
+type = "log"

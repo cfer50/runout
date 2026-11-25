@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "runout"
+version = "0.1.0"
+description = "Scrobble your records. A Raspberry Pi daemon that listens to your turntable, identifies what's playing and scrobbles it to Maloja, Koito, ListenBrainz or last.fm."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "runout contributors" }]
+keywords = ["scrobbler", "vinyl", "turntable", "listenbrainz", "maloja", "lastfm", "raspberry-pi"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: Multimedia :: Sound/Audio",
+]
+dependencies = [
+  "aiohttp>=3.9",
+  "aiohttp-retry>=2.8",
+  "numpy>=1.24",
+  "shazamio>=0.7",
+]
+
+[project.optional-dependencies]
+sounddevice = ["sounddevice>=0.4"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "pytest-aiohttp>=1.0", "ruff>=0.5"]
+
+[project.scripts]
+runout = "runout.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["runout*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]

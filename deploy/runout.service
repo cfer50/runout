@@ -1,0 +1,25 @@
+[Unit]
+Description=runout - scrobble your records
+Documentation=https://github.com/cfer50/runout
+Wants=network-online.target sound.target
+After=network-online.target sound.target
+
+[Service]
+Type=simple
+User=runout
+# Mic access comes from the runout user being in the audio group (see install.sh).
+EnvironmentFile=-/etc/runout/env
+ExecStart=/opt/runout/venv/bin/runout --config /etc/runout/config.toml run
+Restart=on-failure
+RestartSec=10
+StateDirectory=runout
+
+# Hardening: it only needs the network, the mic and its own state dir.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/runout
+
+[Install]
+WantedBy=multi-user.target

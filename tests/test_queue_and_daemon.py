@@ -223,3 +223,32 @@ async def test_shutdown_releases_held_scrobbles():
     await run_ticks(d, clock, 4)
     await d.shutdown()
     assert len(target.scrobbles) == 1
+
+
+async def test_dedupe_waits_for_long_songs_to_end():
+    """Purple Rain test: no mid-song scrobble at 4 minutes when dedupe is on."""
+    target = RecordingTarget()
+    cfg = parse(
+        {
+            "target": [{"type": "log"}],
+            "trigger": {"type": "command", "command": "x"},
+            "dedupe": {"lastfm_user": "u", "api_key": "k"},
+        }
+    )
+    clock = Clock()
+    purple_rain = Track("Prince", "Purple Rain", offset=1.0)
+    n = 26  # ~8.7 minutes of samples
+    d = Daemon(
+        cfg,
+        trigger=Debounced(FakeTrigger([True] * n + [False] * 8), on_after=1, off_after=1),
+        recorder=FakeRecorder([0.05] * n),
+        recogniser=FakeRecogniser([purple_rain] * n),
+        targets=[target],
+        queue=ScrobbleQueue(":memory:"),
+        history=FakeHistory(already=set()),
+        clock=clock,
+    )
+    await run_ticks(d, clock, n)
+    assert d.deferred == [] and target.scrobbles == []  # nothing at the 4-minute mark
+    await run_ticks(d, clock, 8)  # record stops; held 2 minutes; checked; sent
+    assert [t.title for t, _ in target.scrobbles] == ["Purple Rain"]

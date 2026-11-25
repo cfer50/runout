@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import signal
 import time
@@ -48,7 +49,13 @@ class Daemon:
         self.deferred: list[tuple[float, Scrobble]] = []
         self.clock = clock
         self.sleep = sleep
-        self.session = Session(cfg.session, cfg.audio.sample_seconds)
+        session_cfg = cfg.session
+        if history is not None:
+            # With dedupe on, never scrobble mid-song (the 4-minute rule): a streaming app
+            # usually logs a song when it ends, so checking before then would be too early
+            # for long tracks. Scrobble when the song finishes, then wait and check.
+            session_cfg = dataclasses.replace(session_cfg, scrobble_after_seconds=float("inf"))
+        self.session = Session(session_cfg, cfg.audio.sample_seconds)
         self.listening = False
         self._last_flush = 0.0
         self._stop = asyncio.Event()

@@ -149,7 +149,7 @@ Add `-v` to any command for debug logging, which shows every sample, its level a
   names afterwards.
 - **Streaming while the turntable's on?** runout can't tell your record from Deezer
   playing through the same speakers, so you'd get doubles. Turn on `[dedupe]` with your
-  last.fm username: runout waits a couple of minutes after each song, checks your
+  last.fm username: runout waits until each song ends plus a couple of minutes, checks your
   last.fm history, and skips anything another app already scrobbled.
 - **Short songs getting missed?** Lower `interval_seconds` (e.g. 15) so you get more samples.
 

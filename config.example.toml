@@ -74,7 +74,7 @@ idle_timeout_seconds = 90         # this long without a match ends the current s
 # [dedupe]
 # lastfm_user = "your-lastfm-username"
 # api_key = "..."                 # optional if you have a lastfm [[target]] below
-# delay_seconds = 120             # how long to wait before checking
+# delay_seconds = 120             # how long to wait after a song ends before checking
 # window_seconds = 600            # same song within this window counts as already scrobbled
 
 

@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 
 from runout.audio import Recorder, build_recorder
 from runout.config import Config
+from runout.dedupe import LastfmHistory
 from runout.models import NowPlaying, Scrobble
 from runout.queue import ScrobbleQueue
 from runout.recognisers import Recogniser, build_recogniser
@@ -32,6 +33,7 @@ class Daemon:
         recogniser: Recogniser,
         targets: list[Target],
         queue: ScrobbleQueue,
+        history: LastfmHistory | None = None,
         clock: Callable[[], float] = time.time,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ):
@@ -41,6 +43,9 @@ class Daemon:
         self.recogniser = recogniser
         self.targets = targets
         self.queue = queue
+        self.history = history
+        # Scrobbles waiting out the dedupe delay: (due_time, event)
+        self.deferred: list[tuple[float, Scrobble]] = []
         self.clock = clock
         self.sleep = sleep
         self.session = Session(cfg.session, cfg.audio.sample_seconds)
@@ -57,10 +62,39 @@ class Daemon:
             recogniser=build_recogniser(cfg.recogniser),
             targets=[build_target(t, cfg.media_player) for t in cfg.targets],
             queue=ScrobbleQueue(cfg.queue_path),
+            history=(
+                LastfmHistory(cfg.dedupe.lastfm_user, cfg.dedupe.api_key, cfg.dedupe.window_seconds)
+                if cfg.dedupe.lastfm_user
+                else None
+            ),
         )
 
     def stop(self) -> None:
         self._stop.set()
+
+    async def handle(self, events: list[Event]) -> None:
+        """Send now-playing straight away; hold scrobbles back if dedupe is on."""
+        for event in events:
+            if isinstance(event, Scrobble) and self.history is not None:
+                due = self.clock() + self.cfg.dedupe.delay_seconds
+                self.deferred.append((due, event))
+            else:
+                await self.dispatch([event])
+
+    async def release_deferred(self, everything: bool = False) -> None:
+        """Check held scrobbles against last.fm once their wait is over."""
+        now = self.clock()
+        ready = [e for due, e in self.deferred if everything or due <= now]
+        self.deferred = [(due, e) for due, e in self.deferred if not (everything or due <= now)]
+        for event in ready:
+            if await self.history.already_scrobbled(event.track, event.listened_at):
+                log.info(
+                    "already on last.fm from another app, skipping: %s - %s",
+                    event.track.artist,
+                    event.track.title,
+                )
+                continue
+            await self.dispatch([event])
 
     async def dispatch(self, events: list[Event]) -> None:
         for event in events:
@@ -97,7 +131,8 @@ class Daemon:
             if self.listening:
                 log.info("record player off; stopped listening")
                 self.listening = False
-                await self.dispatch(self.session.end())
+                await self.handle(self.session.end())
+            await self.release_deferred()
             await self._maybe_flush()
             return self.cfg.trigger.poll_seconds
 
@@ -123,7 +158,8 @@ class Daemon:
             else:
                 log.debug("no match (rms %.4f)", sample.rms)
 
-        await self.dispatch(self.session.observe(track, started))
+        await self.handle(self.session.observe(track, started))
+        await self.release_deferred()
         await self._maybe_flush()
         elapsed = self.clock() - started
         return max(0.0, self.cfg.audio.interval_seconds - elapsed)
@@ -155,8 +191,13 @@ class Daemon:
 
     async def shutdown(self) -> None:
         # Don't lose a song that was nearly finished when we got stopped.
-        await self.dispatch(self.session.end())
-        for closeable in (self.trigger.trigger, self.recogniser, *self.targets):
+        await self.handle(self.session.end())
+        if self.deferred:
+            await self.release_deferred(everything=True)
+        closeables = [self.trigger.trigger, self.recogniser, *self.targets]
+        if self.history is not None:
+            closeables.append(self.history)
+        for closeable in closeables:
             try:
                 await closeable.close()
             except Exception:  # pragma: no cover - best effort

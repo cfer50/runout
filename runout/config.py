@@ -75,6 +75,14 @@ class SessionConfig:
 
 
 @dataclass
+class DedupeConfig:
+    lastfm_user: str | None = None  # set this to turn dedupe on
+    api_key: str | None = None  # defaults to the lastfm target's api_key
+    delay_seconds: float = 120.0  # wait this long after a song before checking
+    window_seconds: int = 600  # same song within this many seconds = already scrobbled
+
+
+@dataclass
 class TargetConfig:
     type: str
     name: str
@@ -90,6 +98,7 @@ class Config:
     targets: list[TargetConfig]
     queue_path: Path
     media_player: str = "Turntable"
+    dedupe: DedupeConfig = field(default_factory=DedupeConfig)
 
 
 _TRIGGERS = {"always", "homeassistant", "command"}
@@ -160,6 +169,13 @@ def parse(raw: dict[str, Any]) -> Config:
     if len(set(names)) != len(names):
         raise ConfigError("[[target]] names must be unique")
 
+    dedupe = _build(DedupeConfig, raw.get("dedupe", {}), "dedupe")
+    if dedupe.lastfm_user and not dedupe.api_key:
+        lastfm = next((t for t in targets if t.type == "lastfm"), None)
+        if lastfm is None:
+            raise ConfigError("[dedupe] needs api_key (or a lastfm [[target]] to borrow it from)")
+        dedupe.api_key = lastfm.options["api_key"]
+
     general = raw.get("general", {})
     queue_path = Path(general.get("queue_path", "~/.local/state/runout/queue.db")).expanduser()
 
@@ -171,6 +187,7 @@ def parse(raw: dict[str, Any]) -> Config:
         targets=targets,
         queue_path=queue_path,
         media_player=general.get("media_player", "Turntable"),
+        dedupe=dedupe,
     )
 
 

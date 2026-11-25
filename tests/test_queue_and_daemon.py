@@ -153,3 +153,73 @@ def test_replay_of_same_song_is_not_a_duplicate():
     assert q.seen_recently(A, 1000) is False
     assert q.seen_recently(A, 1030) is True
     assert q.seen_recently(A, 1000 + 200) is False
+
+
+class FakeHistory:
+    def __init__(self, already):
+        self.already = set(already)
+        self.checked = []
+
+    async def already_scrobbled(self, track, listened_at):
+        self.checked.append(track.title)
+        return track.title in self.already
+
+    async def close(self):
+        pass
+
+
+async def test_dedupe_holds_then_skips_streamed_song():
+    target = RecordingTarget()
+    q = ScrobbleQueue(":memory:")
+    cfg = parse(
+        {
+            "target": [{"type": "log"}],
+            "trigger": {"type": "command", "command": "x"},
+            "dedupe": {"lastfm_user": "u", "api_key": "k", "delay_seconds": 120},
+        }
+    )
+    clock = Clock()
+    hist = FakeHistory(already={"Jesus Built My Hotrod"})
+    d = Daemon(
+        cfg,
+        trigger=Debounced(FakeTrigger([True] * 12 + [False] * 10), on_after=1, off_after=1),
+        recorder=FakeRecorder([0.05] * 12),
+        recogniser=FakeRecogniser([A] * 4 + [B] * 8),
+        targets=[target],
+        queue=q,
+        history=hist,
+        clock=clock,
+    )
+    await run_ticks(d, clock, 6)  # A confirmed, then B confirmed -> A's scrobble is held
+    assert target.scrobbles == [] and len(d.deferred) == 1
+    await run_ticks(d, clock, 7)  # 140s later: A checked, found on last.fm, skipped
+    assert hist.checked == ["Jesus Built My Hotrod"] and target.scrobbles == []
+    await run_ticks(d, clock, 10)  # turntable off -> B ends, held, then released
+    assert [t.title for t, _ in target.scrobbles] == ["The Middle"]
+    assert [t.title for t in target.now] == ["Jesus Built My Hotrod", "The Middle"]
+
+
+async def test_shutdown_releases_held_scrobbles():
+    target = RecordingTarget()
+    q = ScrobbleQueue(":memory:")
+    cfg = parse(
+        {
+            "target": [{"type": "log"}],
+            "trigger": {"type": "command", "command": "x"},
+            "dedupe": {"lastfm_user": "u", "api_key": "k"},
+        }
+    )
+    clock = Clock()
+    d = Daemon(
+        cfg,
+        trigger=Debounced(FakeTrigger([True] * 4), on_after=1, off_after=1),
+        recorder=FakeRecorder([0.05] * 4),
+        recogniser=FakeRecogniser([A] * 4),
+        targets=[target],
+        queue=q,
+        history=FakeHistory(already=set()),
+        clock=clock,
+    )
+    await run_ticks(d, clock, 4)
+    await d.shutdown()
+    assert len(target.scrobbles) == 1

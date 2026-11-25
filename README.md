@@ -33,6 +33,8 @@ Records, tapes, CDs and the radio don't, so they never get counted. runout count
   was, so the scrobble time is when the song actually started, not when we noticed it.
 - **It speaks the open protocol.** One `listenbrainz` target covers ListenBrainz, Maloja
   and Koito. last.fm is supported too.
+- **It doesn't double up.** Restarting mid-song won't scrobble it twice, and optional
+  last.fm checking skips songs your streaming app already logged.
 - **It doesn't lose scrobbles.** If your server or the Wi-Fi is down, scrobbles wait in a
   small SQLite queue and get delivered later.
 
@@ -145,6 +147,10 @@ Add `-v` to any command for debug logging, which shows every sample, its level a
   pressing. runout treats "Song" and "Song (2012 Remaster)" as the same track, but the
   album name comes from whatever Shazam matched. Maloja and Koito both let you fix album
   names afterwards.
+- **Streaming while the turntable's on?** runout can't tell your record from Deezer
+  playing through the same speakers, so you'd get doubles. Turn on `[dedupe]` with your
+  last.fm username: runout waits a couple of minutes after each song, checks your
+  last.fm history, and skips anything another app already scrobbled.
 - **Short songs getting missed?** Lower `interval_seconds` (e.g. 15) so you get more samples.
 
 ## Recognition, honestly

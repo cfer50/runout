@@ -31,3 +31,15 @@ def test_parenthetical_that_is_part_of_title_survives():
         Track("Pet Shop Boys", "Love etc.").key
         != Track("Pet Shop Boys", "Love etc. (Was It Something I Said)").key
     )
+
+
+def test_artist_spelling_variants_match():
+    # Seen in the wild: Deezer vs Shazam for the same song.
+    assert Track("Salt-N-Pepa", "Whatta Man").key == Track("Salt 'N' Pepa", "Whatta Man").key
+
+
+def test_featuring_credit_is_ignored():
+    assert (
+        Track("Salt-N-Pepa", "Whatta Man (feat. En Vogue)").key
+        == Track("Salt 'N' Pepa", "Whatta Man").key
+    )

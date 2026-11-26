@@ -32,7 +32,8 @@ class Track:
 
 
 _QUALIFIER = re.compile(
-    r"\s*([(\[].*?(remaster|version|mix|edit|live|mono|stereo|deluxe).*?[)\]]"
+    r"\s*([(\[].*?(remaster|version|mix|edit|live|mono|stereo|deluxe"
+    r"|\bfeat\b|\bft\.|featuring|\bwith\b).*?[)\]]"
     r"|-\s*(\d{4}\s*)?(remaster(ed)?|live|mono|stereo|single version|radio edit).*)$",
     re.IGNORECASE,
 )
@@ -50,8 +51,8 @@ def _normalise(text: str) -> str:
     text = unicodedata.normalize("NFKD", text)
     text = "".join(c for c in text if not unicodedata.combining(c))
     text = text.casefold().replace("&", "and")
-    text = re.sub(r"[^\w\s]", "", text)
-    return re.sub(r"\s+", " ", text).strip()
+    # Drop punctuation AND spaces: "Salt-N-Pepa" and "Salt 'N' Pepa" must match.
+    return re.sub(r"[\W_]+", "", text)
 
 
 @dataclass(frozen=True)

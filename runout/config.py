@@ -56,7 +56,8 @@ class AudioConfig:
     channels: int = 1
     sample_seconds: float = 10.0
     interval_seconds: float = 20.0  # time between the starts of two samples
-    silence_rms: float = 0.004  # RMS as a fraction of full scale; below this is "silence"
+    silence_rms: float = 0.002  # RMS as a fraction of full scale; below this is "silence"
+    trim_start_seconds: float = 0.5  # discard the mic's start-up click/pop
 
 
 @dataclass

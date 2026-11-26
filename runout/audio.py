@@ -47,6 +47,25 @@ def rms_of_wav(wav: bytes) -> float:
     return float(np.sqrt(np.mean(np.square(pcm))) / 32768.0)
 
 
+def trim_wav_start(wav: bytes, seconds: float) -> bytes:
+    """Drop the first ``seconds`` of a WAV.
+
+    Many USB mics click or pop as they start recording. A 10 ms pop at full volume
+    is enough to make a silent room measure as loud as music, so we cut it off.
+    """
+    with wave.open(io.BytesIO(wav)) as w:
+        rate, channels, width = w.getframerate(), w.getnchannels(), w.getsampwidth()
+        w.setpos(min(w.getnframes(), int(seconds * rate)))
+        frames = w.readframes(w.getnframes())
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as out:
+        out.setnchannels(channels)
+        out.setsampwidth(width)
+        out.setframerate(rate)
+        out.writeframes(frames)
+    return buf.getvalue()
+
+
 def pcm_to_wav(pcm: np.ndarray, sample_rate: int, channels: int) -> bytes:
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
@@ -66,7 +85,10 @@ class Recorder(ABC):
 
     async def sample(self, seconds: float | None = None) -> Sample:
         seconds = seconds or self.cfg.sample_seconds
-        wav = await self.record(seconds)
+        trim = self.cfg.trim_start_seconds
+        wav = await self.record(seconds + trim)
+        if trim > 0:
+            wav = trim_wav_start(wav, trim)
         return Sample(wav=wav, seconds=seconds, rms=rms_of_wav(wav))
 
 
@@ -116,7 +138,7 @@ class ArecordRecorder(Recorder):
             "-f", "S16_LE",
             "-r", str(self.cfg.sample_rate),
             "-c", str(self.cfg.channels),
-            "-d", str(max(1, round(seconds))),
+            "-s", str(max(1, int(seconds * self.cfg.sample_rate))),  # exact length, not whole secs
             "-t", "wav", "-",
         ]  # fmt: skip
         proc = await asyncio.create_subprocess_exec(

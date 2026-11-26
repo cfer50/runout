@@ -47,7 +47,8 @@ sample_rate = 44100
 channels = 1
 sample_seconds = 10               # length of each sample sent for recognition
 interval_seconds = 20             # how often to sample while playing
-silence_rms = 0.004               # below this level counts as silence; tune with `runout check`
+silence_rms = 0.002               # below this level counts as silence; tune with `runout check`
+trim_start_seconds = 0.5          # many USB mics pop as they start recording; this cuts it off
 
 
 # --- Recognition ------------------------------------------------------------------

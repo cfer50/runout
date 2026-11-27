@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 from runout.audio import Recorder, build_recorder
 from runout.config import Config
 from runout.dedupe import LastfmHistory
+from runout.gapfill import GapFiller, Heard
 from runout.models import NowPlaying, Scrobble
 from runout.queue import ScrobbleQueue
 from runout.recognisers import Recogniser, build_recogniser
@@ -35,6 +36,7 @@ class Daemon:
         targets: list[Target],
         queue: ScrobbleQueue,
         history: LastfmHistory | None = None,
+        gapfiller: GapFiller | None = None,
         clock: Callable[[], float] = time.time,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ):
@@ -45,6 +47,8 @@ class Daemon:
         self.targets = targets
         self.queue = queue
         self.history = history
+        self.gapfiller = gapfiller
+        self.last_heard: Heard | None = None  # last recognised song, for gap filling
         # Scrobbles waiting out the dedupe delay: (due_time, event)
         self.deferred: list[tuple[float, Scrobble]] = []
         self.clock = clock
@@ -74,6 +78,14 @@ class Daemon:
                 if cfg.dedupe.lastfm_user
                 else None
             ),
+            gapfiller=(
+                GapFiller(
+                    max_missing=cfg.gapfill.max_missing,
+                    tolerance=cfg.gapfill.tolerance_seconds,
+                )
+                if cfg.gapfill.enabled
+                else None
+            ),
         )
 
     def stop(self) -> None:
@@ -82,11 +94,26 @@ class Daemon:
     async def handle(self, events: list[Event]) -> None:
         """Send now-playing straight away; hold scrobbles back if dedupe is on."""
         for event in events:
+            if isinstance(event, NowPlaying) and event.started_at is not None:
+                await self._fill_gap(Heard(event.track, event.started_at))
             if isinstance(event, Scrobble) and self.history is not None:
                 due = self.clock() + self.cfg.dedupe.delay_seconds
                 self.deferred.append((due, event))
             else:
                 await self.dispatch([event])
+
+    async def _fill_gap(self, heard: Heard) -> None:
+        """A new song started: did the mic miss any album tracks since the last one?"""
+        before, self.last_heard = self.last_heard, heard
+        if self.gapfiller is None or before is None:
+            return
+        for missed in await self.gapfiller.fill(before, heard):
+            log.info(
+                "filled in: %s - %s (too quiet to recognise, but the album timing fits)",
+                missed.track.artist,
+                missed.track.title,
+            )
+            await self.handle([missed])
 
     async def release_deferred(self, everything: bool = False) -> None:
         """Check held scrobbles against last.fm once their wait is over."""
@@ -138,6 +165,7 @@ class Daemon:
             if self.listening:
                 log.info("record player off; stopped listening")
                 self.listening = False
+                self.last_heard = None  # never fill gaps across a stop
                 await self.handle(self.session.end())
             await self.release_deferred()
             await self._maybe_flush()
@@ -204,6 +232,8 @@ class Daemon:
         closeables = [self.trigger.trigger, self.recogniser, *self.targets]
         if self.history is not None:
             closeables.append(self.history)
+        if self.gapfiller is not None:
+            closeables.append(self.gapfiller)
         for closeable in closeables:
             try:
                 await closeable.close()

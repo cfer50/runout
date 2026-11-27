@@ -67,6 +67,17 @@ scrobble_after_seconds = 240      # scrobble early once heard this long (last.fm
 idle_timeout_seconds = 90         # this long without a match ends the current song
 
 
+# --- Fill in album tracks the mic missed ----------------------------------------
+# If runout hears track 3 and then track 5 of the same album, with just the right gap,
+# it looks up the tracklist on MusicBrainz and scrobbles track 4 too. On by default.
+# It never fills a gap whose timing doesn't match (skipped songs, breaks, record swaps).
+
+[gapfill]
+enabled = true
+max_missing = 3                   # never fill more than this many songs in one gap
+tolerance_seconds = 20            # how closely the gap must match the songs' lengths
+
+
 # --- Skip songs another app already scrobbled (optional) ------------------------
 # Streaming through speakers while the turntable has power? runout would hear it and
 # scrobble it again. With this on, runout waits a couple of minutes after each song,

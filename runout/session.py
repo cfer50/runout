@@ -100,7 +100,7 @@ class Session:
         if cur is not None:
             if not cur.now_playing_sent:
                 cur.now_playing_sent = True
-                events.append(NowPlaying(cur.track))
+                events.append(NowPlaying(cur.track, int(cur.started_at)))
             if not cur.scrobbled and cur.listened >= self.cfg.scrobble_after_seconds:
                 cur.scrobbled = True
                 events.append(Scrobble(cur.track, int(cur.started_at)))

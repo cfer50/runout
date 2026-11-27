@@ -55,6 +55,11 @@ def _normalise(text: str) -> str:
     return re.sub(r"[\W_]+", "", text)
 
 
+def title_key(title: str) -> str:
+    """A song title reduced to what identifies it (no case, accents, punctuation, remaster tags)."""
+    return _normalise(_strip_qualifiers(title))
+
+
 @dataclass(frozen=True)
 class Scrobble:
     """A completed listen, ready to submit."""
@@ -66,3 +71,5 @@ class Scrobble:
 @dataclass(frozen=True)
 class NowPlaying:
     track: Track
+    # When the song started (unix seconds), if known. Used to fill in missed tracks.
+    started_at: int | None = field(default=None, compare=False)

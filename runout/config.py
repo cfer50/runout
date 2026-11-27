@@ -84,6 +84,13 @@ class DedupeConfig:
 
 
 @dataclass
+class GapfillConfig:
+    enabled: bool = True  # fill in album tracks the mic missed, using MusicBrainz
+    max_missing: int = 3  # never fill more than this many tracks in one gap
+    tolerance_seconds: float = 20.0  # how closely the timing must match the tracklist
+
+
+@dataclass
 class TargetConfig:
     type: str
     name: str
@@ -100,6 +107,7 @@ class Config:
     queue_path: Path
     media_player: str = "Turntable"
     dedupe: DedupeConfig = field(default_factory=DedupeConfig)
+    gapfill: GapfillConfig = field(default_factory=GapfillConfig)
 
 
 _TRIGGERS = {"always", "homeassistant", "command"}
@@ -177,6 +185,10 @@ def parse(raw: dict[str, Any]) -> Config:
             raise ConfigError("[dedupe] needs api_key (or a lastfm [[target]] to borrow it from)")
         dedupe.api_key = lastfm.options["api_key"]
 
+    gapfill = _build(GapfillConfig, raw.get("gapfill", {}), "gapfill")
+    if gapfill.max_missing < 1:
+        raise ConfigError("[gapfill] max_missing must be at least 1")
+
     general = raw.get("general", {})
     queue_path = Path(general.get("queue_path", "~/.local/state/runout/queue.db")).expanduser()
 
@@ -189,6 +201,7 @@ def parse(raw: dict[str, Any]) -> Config:
         queue_path=queue_path,
         media_player=general.get("media_player", "Turntable"),
         dedupe=dedupe,
+        gapfill=gapfill,
     )
 
 

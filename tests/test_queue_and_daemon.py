@@ -252,3 +252,43 @@ async def test_dedupe_waits_for_long_songs_to_end():
     assert d.deferred == [] and target.scrobbles == []  # nothing at the 4-minute mark
     await run_ticks(d, clock, 8)  # record stops; held 2 minutes; checked; sent
     assert [t.title for t, _ in target.scrobbles] == ["Purple Rain"]
+
+
+class FakeGapFiller:
+    def __init__(self, missing):
+        self.missing = missing
+        self.calls = []
+
+    async def fill(self, before, after):
+        from runout.models import Scrobble
+
+        self.calls.append((before.track.title, after.track.title))
+        return [
+            Scrobble(Track("Ministry", m, source="gapfill"), before.started_at + 60)
+            for m in self.missing
+        ]
+
+    async def close(self):
+        pass
+
+
+async def test_daemon_scrobbles_filled_in_songs():
+    target = RecordingTarget()
+    cfg = parse({"target": [{"type": "log"}], "trigger": {"type": "command", "command": "x"}})
+    clock = Clock()
+    gf = FakeGapFiller(["N.W.O."])
+    d = Daemon(
+        cfg,
+        trigger=Debounced(FakeTrigger([True] * 8 + [False] * 2), on_after=1, off_after=1),
+        recorder=FakeRecorder([0.05] * 8),
+        recogniser=FakeRecogniser([A] * 4 + [B] * 4),
+        targets=[target],
+        queue=ScrobbleQueue(":memory:"),
+        gapfiller=gf,
+        clock=clock,
+    )
+    await run_ticks(d, clock, 10)
+    assert gf.calls == [("Jesus Built My Hotrod", "The Middle")]
+    titles = [t.title for t, _ in target.scrobbles]
+    assert titles == ["Jesus Built My Hotrod", "N.W.O.", "The Middle"]
+    assert d.last_heard is None  # cleared when the record stopped

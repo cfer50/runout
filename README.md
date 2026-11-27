@@ -33,6 +33,9 @@ Records, tapes, CDs and the radio don't, so they never get counted. runout count
   was, so the scrobble time is when the song actually started, not when we noticed it.
 - **It speaks the open protocol.** One `listenbrainz` target covers ListenBrainz, Maloja
   and Koito. last.fm is supported too.
+- **It fills in what the mic missed.** A quiet song between two recognised ones gets
+  scrobbled anyway, if the album's tracklist (from MusicBrainz) and the timing agree.
+  Skip a song or put the kettle on and the timing won't fit, so nothing is made up.
 - **It doesn't double up.** Restarting mid-song won't scrobble it twice, and optional
   last.fm checking skips songs your streaming app already logged.
 - **It doesn't lose scrobbles.** If your server or the Wi-Fi is down, scrobbles wait in a
@@ -139,8 +142,8 @@ Add `-v` to any command for debug logging, which shows every sample, its level a
 
 ## Tuning
 
-- **Missed quiet songs?** Lower `silence_rms`, move the mic closer to a speaker, or use
-  line-in.
+- **Missed quiet songs?** Gap filling catches most of these on albums. For the rest, lower
+  `silence_rms` (even to `0`), move the mic closer to a speaker, or use line-in.
 - **Fake scrobbles?** Raise `min_confirmations` to 3, or set `max_skew = 0.001` for stricter
   Shazam matching.
 - **Wrong album version?** Shazam often matches a compilation or remaster rather than your
@@ -173,6 +176,8 @@ runout/
   audio.py        capture from a mic
   recognisers.py  audio → song          → add ACRCloud, a local fingerprint DB...
   session.py      matches → scrobbles   (pure logic, heavily tested)
+  gapfill.py      fill in songs the mic missed, from MusicBrainz tracklists
+  dedupe.py       skip songs another app already scrobbled
   targets.py      where scrobbles go    → add Libre.fm, a webhook, MQTT...
   queue.py        offline retry
   daemon.py       the loop tying it together

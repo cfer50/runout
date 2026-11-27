@@ -41,6 +41,12 @@ CI runs the same three on Python 3.11 to 3.13.
 Changes to `session.py` change what gets scrobbled for everyone, so they need tests that
 show the before and after behaviour.
 
+## Gap filling
+
+`gapfill.py` is deliberately cautious: `plan_fill` is a pure function with its own tests
+(skips, long pauses, speed drift). Loosening it means more made-up plays, so any change
+needs a test showing a case it now fills and one it still refuses.
+
 ## Reporting a bad match or missed song
 
 Run with `-v` and include the log lines around it: they show each sample's level and what
